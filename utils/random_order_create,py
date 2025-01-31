@@ -1,0 +1,80 @@
+import os
+import shutil
+import random
+
+def get_problem_type(code_file_path):
+    """
+    Reads the 'optimus-code.py' file and returns the problem type found in the line
+    starting with '# Problem type:'.
+    """
+    with open(code_file_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith("# Problem type:"):
+                # Extract the problem type, e.g. 'LP', 'MILP', etc.
+                return line.split(":", 1)[1].strip()
+    return None  # If for some reason it's not found
+
+def main():
+    base_dir = "/Users/stevenzhai/Desktop/MILP_data/sample-data-easy"
+    
+    # Dictionary: problem_type -> list of directories (paths) that have _c
+    problem_type_to_dirs = {}
+
+    # 1) Walk through the entire base directory to find all _c dirs
+    for root, dirs, files in os.walk(base_dir):
+        # We only care about directories that end with '_c' and contain the 3 files
+        if root.endswith("_c"):
+            # Check if the required files exist in this folder
+            required_files = {"optimus-code.py", "problem_info.json", "parameters.json"}
+            if required_files.issubset(set(files)):
+                # Extract the problem type from the code file
+                code_file_path = os.path.join(root, "optimus-code.py")
+                p_type = get_problem_type(code_file_path)
+                if p_type:
+                    # Group by problem type
+                    if p_type not in problem_type_to_dirs:
+                        problem_type_to_dirs[p_type] = []
+                    problem_type_to_dirs[p_type].append(root)
+
+    # 2) For each problem type, randomly pair each directory with a different directory of same type
+    for p_type, dir_list in problem_type_to_dirs.items():
+        # If there's only one directory or none, we can't pick a different random directory
+        if len(dir_list) < 2:
+            continue
+        
+        for c_dir in dir_list:
+            parent_dir = os.path.dirname(c_dir)
+            # Construct the _j dir from the _c dir
+            # e.g. from ".../1_c" -> ".../1_j"
+            c_basename = os.path.basename(c_dir)  # e.g. "1_c"
+            j_basename = c_basename.replace("_c", "_j")
+            j_dir = os.path.join(parent_dir, j_basename)
+            
+            # If the _j directory already exists, you may choose to skip or overwrite.
+            # Here we skip creating it again to avoid overwriting existing files.
+            if os.path.exists(j_dir):
+                continue
+            
+            # Choose a random different directory among the same group
+            # We'll filter out the current directory so that it doesn't pick itself.
+            possible_choices = [d for d in dir_list if d != c_dir]
+            if not possible_choices:
+                # If there's no different directory left, skip
+                continue
+            
+            chosen_dir = random.choice(possible_choices)
+            
+            # 3) Create the _j directory
+            os.makedirs(j_dir, exist_ok=True)
+            
+            # 4) Copy the three files from the chosen directory to the _j directory
+            for filename in ["optimus-code.py", "problem_info.json", "parameters.json"]:
+                src_path = os.path.join(chosen_dir, filename)
+                dst_path = os.path.join(j_dir, filename)
+                shutil.copy(src_path, dst_path)
+            
+            print(f"Created {j_dir} by copying from {chosen_dir}")
+
+if __name__ == "__main__":
+    main()
